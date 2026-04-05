@@ -1,1 +1,39 @@
 name: Security Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  devsecops:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Safety
+        run: |
+          pip install safety
+          safety check
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit
+
+      - name: Run Bandit (SAST)
+        run: |
+          pip install bandit
+          bandit -r .
