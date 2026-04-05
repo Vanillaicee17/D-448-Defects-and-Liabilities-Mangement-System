@@ -42,19 +42,28 @@ jobs:
           pip install bandit
           bandit -r .
 
-  image_scan:
-    name: Build docker image and Scan image
+  secret_scan:
+    name: Secret Scanning on Codebase
     runs-on: ubuntu-latest
-    needs: devsecops
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # - name: Setup Docker
-      #   uses: docker/setup-docker-action@5
+      - name: Run Gitleaks (Secret Detection)
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
 
-      - name: BUild Docker Image
+  image_scan:
+    name: Build docker image and Scan image
+    runs-on: ubuntu-latest
+    needs: [devsecops, secret_scan]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
         run: docker build -f Dockerfile -t myapp:latest .
 
       - name: Docker Login
@@ -78,3 +87,26 @@ jobs:
           image-ref: "myapp:latest"
           severity: "CRITICAL,HIGH"
           exit-code: "0"
+
+  dast_scan:
+    name: DAST Scan (ZAP)
+    runs-on: ubuntu-latest
+    needs: image_scan
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -f Dockerfile -t myapp:latest .
+
+      - name: Run Application
+        run: |
+          docker run -d -p 8000:8000 myapp:latest
+          sleep 15
+
+      - name: Run OWASP ZAP Scan
+        continue-on-error: true
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: "http://localhost:8000"
