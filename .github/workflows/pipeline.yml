@@ -51,10 +51,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Docker
-        uses: docker/setup-docker-action@5
+      # - name: Setup Docker
+      #   uses: docker/setup-docker-action@5
 
-      - name: Docker Login
+      - name: BUild Docker Image
         run: docker build -f Dockerfile -t myapp:latest .
 
       - name: Docker Login
@@ -67,9 +67,9 @@ jobs:
         continue-on-error: true
         uses: docker/scout-action@v1.18.2
         with:
-          command: quickview, cves
+          command: quickview,cves
           image: local://myapp:latest
-          only-severities: high, critical
+          only-severities: high,critical
 
       - name: Trivy Docker image
         continue-on-error: true
