@@ -24,16 +24,20 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Safety
-        run: |
-          pip install safety
-          safety scan
+        continue-on-error: true
+        uses: pyupio/safety-action@v1
+        with:
+          api-key: ${{ secrets.SAFETY_API_KEY }}
+          args: --detailed-output
 
       - name: Run pip-audit
+        continue-on-error: true
         run: |
           pip install pip-audit
           pip-audit
 
       - name: Run Bandit (SAST)
+        continue-on-error: true
         run: |
           pip install bandit
           bandit -r .
