@@ -6,7 +6,7 @@ from app.db.base import Base
 from app.db.seed import init_admin, init_roles
 from app.db.session import SessionLocal
 
-from api import auth, vessel, defect, defect_assignment, user, vendor, equipment
+from api import auth, vessel, defect, defect_assignment, user, vendor, equipment, ingestion
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.include_router(user.router)
 app.include_router(defect_assignment.router)
 app.include_router(vendor.router)
 app.include_router(equipment.router)
+app.include_router(ingestion.router)
 
 
 @app.get("/")

@@ -7,6 +7,7 @@ class VendorAssignment(Base):
     __tablename__ = "vendor_assignment"
 
     assignment_id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendor.vendor_id"))
 
     defect_id = Column(Integer, ForeignKey("defect.defect_id"))
     vessel_id = Column(Integer, ForeignKey("vessel.vessel_id"))
