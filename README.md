@@ -39,17 +39,17 @@ The project is a containerized monolithic REST API. FastAPI exposes the HTTP int
 
 ```mermaid
 flowchart TD
-    Client[API client / Swagger UI] -->|HTTP + Bearer JWT| FastAPI[FastAPI application]
-    FastAPI --> Routers[app/api routers]
-    Routers --> Auth[app/core auth and security]
-    Routers --> Schemas[app/schemas Pydantic contracts]
-    Routers --> Services[app/services business helpers]
-    Routers --> Models[app/models SQLAlchemy ORM]
+    Client["API client / Swagger UI"] -->|HTTP + Bearer JWT| FastAPI["FastAPI application"]
+    FastAPI --> Routers["app/api routers"]
+    Routers --> Auth["app/core auth and security"]
+    Routers --> Schemas["app/schemas Pydantic contracts"]
+    Routers --> Services["app/services business helpers"]
+    Routers --> Models["app/models SQLAlchemy ORM"]
     Services --> Models
-    Models --> DB[(PostgreSQL defect_management)]
-    FastAPI --> Seed[Startup seed: roles and admin]
+    Models --> DB[("PostgreSQL defect_management")]
+    FastAPI --> Seed["Startup seed: roles and admin"]
     Seed --> DB
-    PgAdmin[pgAdmin] --> DB
+    PgAdmin["pgAdmin"] --> DB
 ```
 
 Layer mapping:
@@ -234,18 +234,18 @@ Primary application data flow:
 
 ```mermaid
 flowchart LR
-    Login[POST /auth/login] --> Token[Access + refresh token]
-    Token --> CreateDefect[POST /defects/]
-    CreateDefect --> Validate[Vessel, equipment, organisation validation]
-    Validate --> Defect[(defect table)]
-    CreateDefect --> History1[(defect_history CREATED)]
-    Token --> Assign[POST /assigments/]
-    Assign --> Assignment[(vendor_assignment table)]
-    Assign --> StatusAssigned[(defect.status = ASSIGNED)]
-    Assign --> History2[(defect_history VENDOR_ASSIGNED / STATUS_UPDATE)]
-    Token --> UpdateStatus[PATCH /defects/{id}/status]
-    UpdateStatus --> StatusChange[(defect table)]
-    UpdateStatus --> History3[(defect_history STATUS_UPDATE)]
+    Login["POST /auth/login"] --> Token["Access + refresh token"]
+    Token --> CreateDefect["POST /defects/"]
+    CreateDefect --> Validate["Vessel, equipment, organisation validation"]
+    Validate --> Defect[("defect table")]
+    CreateDefect --> History1[("defect_history CREATED")]
+    Token --> Assign["POST /assigments/"]
+    Assign --> Assignment[("vendor_assignment table")]
+    Assign --> StatusAssigned["defect.status = ASSIGNED"]
+    Assign --> History2[("defect_history VENDOR_ASSIGNED / STATUS_UPDATE")]
+    Token --> UpdateStatus["PATCH /defects/{id}/status"]
+    UpdateStatus --> StatusChange[("defect table")]
+    UpdateStatus --> History3[("defect_history STATUS_UPDATE")]
 ```
 
 Draft ingestion pipeline on `feature/defect-ingestion-system`:
@@ -260,18 +260,18 @@ Most critical draft ingestion flow:
 
 ```mermaid
 flowchart LR
-    Upload[POST /ingestion/pdf] --> PDF[PDFHandler]
-    PDF --> Digital[pypdf text extraction]
-    Digital --> Meaningful{Meaningful text?}
-    Meaningful -->|Yes| RawText[Raw text + confidence 1.0]
-    Meaningful -->|No| Images[pdf2image pages]
-    Images --> OCR[EasyOCR]
-    OCR --> Confidence{Confidence >= 0.6?}
+    Upload["POST /ingestion/pdf"] --> PDF["PDFHandler"]
+    PDF --> Digital["pypdf text extraction"]
+    Digital --> Meaningful{"Meaningful text?"}
+    Meaningful -->|Yes| RawText["Raw text + confidence 1.0"]
+    Meaningful -->|No| Images["pdf2image pages"]
+    Images --> OCR["EasyOCR"]
+    OCR --> Confidence{"Confidence >= 0.6?"}
     Confidence -->|Yes| RawText
-    Confidence -->|No| Tesseract[Tesseract fallback]
+    Confidence -->|No| Tesseract["Tesseract fallback"]
     Tesseract --> RawText
-    RawText --> LLM[Ollama LLM extraction]
-    LLM --> JSON[Structured defect JSON]
+    RawText --> LLM["Ollama LLM extraction"]
+    LLM --> JSON["Structured defect JSON"]
 ```
 
 Data stores:
@@ -791,4 +791,3 @@ Network security:
 
 - Docker Compose exposes PostgreSQL on `5432`, the API on `8000`, and pgAdmin on `5050`.
 - No VPC, security group, mTLS, firewall, or ingress configuration is present.
-
