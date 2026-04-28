@@ -24,6 +24,32 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+
+    
+  mcp:
+    build: .
+    container_name: mcp_server
+    command: python -m app.mcp.server
+    depends_on:
+      - db
+      - ollama
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/defect_management
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: sqlcoder:7b
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/app
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
@@ -39,3 +65,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  ollama_data:
