@@ -12,6 +12,7 @@ Key value propositions:
 - Automatic database table creation and seed data for roles and an initial admin account.
 - Defect history logging for creation, vendor assignment, and status changes.
 - In-progress feature branch work for OCR/LLM-based defect ingestion from PDFs, emails, and forms.
+- In-progress feature branch work for an MCP server that answers database questions through guarded natural-language-to-SQL queries.
 
 ## 2. Table of Contents
 
@@ -69,6 +70,7 @@ External systems and third-party services:
 - GitHub Actions for CI security checks.
 - Safety, pip-audit, Bandit, Gitleaks, Docker Scout, Trivy, and OWASP ZAP in CI.
 - In `feature/defect-ingestion-system`: Ollama, EasyOCR, Tesseract OCR, OpenCV, pypdf, pdf2image, Pillow, and NumPy are referenced by source files.
+- In `feature/mcp-server`: Ollama is added through Docker Compose and used by the natural-language-to-SQL service.
 - No third-party business APIs or cloud services are referenced in the source code.
 
 ## 4. Repository Structure
@@ -82,6 +84,7 @@ External systems and third-party services:
 │   ├── api/                      # FastAPI route modules
 │   ├── core/                     # JWT auth, password hashing, role checks
 │   ├── db/                       # SQLAlchemy base, session, dependency, seed data
+│   ├── mcp/                      # Present on feature/mcp-server; draft MCP server modules
 │   ├── models/                   # SQLAlchemy ORM table definitions
 │   ├── schemas/                  # Pydantic request/response contracts
 │   ├── services/                 # Reusable business helpers; feature branch adds ingestion services
@@ -104,6 +107,7 @@ Significant source directories:
 - `app/db/`: Database connection setup, request-scoped session dependency, and startup seed logic.
 - `app/services/`: Shared defect-history logging.
 - `app/services/ingestion/`: Present on `feature/defect-ingestion-system`; draft OCR, PDF, and LLM extraction services.
+- `app/mcp/`: Present on `feature/mcp-server`; draft MCP server package with SQL generation, validation, schema inspection, and query execution helpers.
 
 ## 5. Core Functionality
 
@@ -224,11 +228,46 @@ Visible limitations before merge:
 - Tesseract and Poppler system binaries may be required at runtime for OCR/PDF conversion, but they are not installed in the Dockerfile.
 - The branch does not yet persist extracted defect data into the existing `defect` tables.
 
+### In-Progress Feature Branch: MCP Server
+
+Branch: `feature/mcp-server`.
+
+This branch adds the start of a Model Context Protocol-style server intended to let an AI assistant answer questions about the defect-management database. The visible design is a guarded natural-language-to-SQL flow: inspect the live PostgreSQL schema, ask a local Ollama SQL model to generate a `SELECT` query, validate the SQL, and execute it against the database.
+
+Files added or changed on the branch:
+
+- `app/mcp/server.py`: Added but currently empty.
+- `app/mcp/tools/query_tool.py`: Added but currently empty.
+- `app/mcp/services/schema.py`: Uses SQLAlchemy inspection to list database tables and columns.
+- `app/mcp/services/nl_to_sql.py`: Sends schema context and the user question to Ollama, using `sqlcoder:7b` by default.
+- `app/mcp/services/sql_guard.py`: Rejects non-`SELECT` statements and forbidden SQL operations such as `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, and `TRUNCATE`.
+- `app/mcp/services/query_executor.py`: Executes validated SQL through SQLAlchemy and returns result rows as dictionaries.
+- `docker-compose.yml`: Adds an `mcp` service on port `8001` and an `ollama` service on port `11434`, plus an `ollama_data` volume.
+
+Intended draft flow from the branch:
+
+1. A user asks a natural-language question about the defect database.
+2. The MCP service reads the current PostgreSQL schema.
+3. Ollama generates a SQL query using the configured model.
+4. The SQL guard allows only `SELECT` queries and appends `LIMIT 100` if missing.
+5. The query executor runs the SQL and returns rows.
+
+Visible limitations before merge:
+
+- `app/mcp/server.py` is empty, so there is no runnable MCP server entrypoint yet.
+- `app/mcp/tools/query_tool.py` is empty, so no MCP tool is registered yet.
+- `requests` and `sqlparse` are imported in the branch but are not added to `requirements.txt`.
+- The Compose service runs `python -m app.mcp.server`, but that module currently has no server implementation.
+- The SQL guard blocks obvious write operations but does not parse SQL deeply enough to be treated as a complete database sandbox.
+- There is no authentication, authorization, audit logging, rate limiting, or row-level access control visible for MCP database queries yet.
+
 ## 6. Data Pipelines & Data Flow
 
 On `main`, no batch, streaming, ETL, ELT, ML, queue-based, or event-driven data pipelines are implemented. Data flow is synchronous request/response REST traffic backed by PostgreSQL.
 
 The `feature/defect-ingestion-system` branch introduces a draft manual ingestion pipeline. It is not complete enough to run end-to-end yet, but the intended flow is visible in the added services.
+
+The `feature/mcp-server` branch introduces a draft query-answering data flow from a natural-language question to a guarded SQL query. It is not complete enough to run as an MCP server yet because the server and tool registration files are empty.
 
 Primary application data flow:
 
@@ -274,6 +313,23 @@ flowchart LR
     LLM --> JSON["Structured defect JSON"]
 ```
 
+Draft MCP query flow on `feature/mcp-server`:
+
+| Flow | Source | Transformations | Sink | Trigger | SLA / throughput |
+| --- | --- | --- | --- | --- | --- |
+| Natural-language database question answering | User question sent to future MCP tool | SQLAlchemy schema introspection; Ollama `sqlcoder:7b` SQL generation; `SELECT`-only validation; query execution | PostgreSQL result rows returned as dictionaries | Future MCP tool invocation; no runnable server yet | Not specified |
+
+```mermaid
+flowchart LR
+    Question["Natural-language database question"] --> Schema["Inspect PostgreSQL schema"]
+    Schema --> Prompt["Build SQL-generation prompt"]
+    Prompt --> Ollama["Ollama sqlcoder:7b"]
+    Ollama --> SQL["Generated SQL"]
+    SQL --> Guard["SQL guard: SELECT only, LIMIT 100"]
+    Guard --> Execute["SQLAlchemy query executor"]
+    Execute --> Rows["Result rows as dictionaries"]
+```
+
 Data stores:
 
 | Store | Technology | Schema highlights | Retention | Access patterns |
@@ -289,6 +345,7 @@ Data contracts:
 - FastAPI generates OpenAPI documentation automatically at runtime.
 - No Avro, Protobuf, JSON Schema files, or checked-in OpenAPI specification are present.
 - On `feature/defect-ingestion-system`, the intended `DefectExtraction` Pydantic contract is referenced but not yet implemented.
+- On `feature/mcp-server`, no MCP protocol schema, tool manifest, or OpenAPI surface is implemented yet.
 
 ## 7. API & Interface Reference
 
@@ -545,6 +602,19 @@ Form ingestion request:
 }
 ```
 
+### MCP Server Draft on `feature/mcp-server`
+
+The branch adds Docker Compose scaffolding for a future MCP server on port `8001`, but no public MCP tool or HTTP interface is implemented yet because `app/mcp/server.py` and `app/mcp/tools/query_tool.py` are empty.
+
+Visible internal service functions:
+
+| Function | File | Purpose |
+| --- | --- | --- |
+| `get_schema_text()` | `app/mcp/services/schema.py` | Returns a text representation of database tables and columns using SQLAlchemy inspection |
+| `generate_sql(question, schema)` | `app/mcp/services/nl_to_sql.py` | Calls Ollama to generate a SQL query from a natural-language question and schema text |
+| `validate_sql(query)` | `app/mcp/services/sql_guard.py` | Allows only `SELECT` queries, rejects common write/DDL operations, and appends `LIMIT 100` if missing |
+| `execute_query(sql)` | `app/mcp/services/query_executor.py` | Executes SQL and returns rows as dictionaries |
+
 ## 8. Configuration & Environment Variables
 
 ### App and Auth
@@ -560,6 +630,16 @@ The `feature/defect-ingestion-system` branch hardcodes the Ollama model name in 
 | Variable | Required | Default | Description | Example |
 | --- | --- | --- | --- | --- |
 | Not configured | N/A | `llama3:8b-instruct-q4_K_M` in code | Ollama model used for local structured extraction | Recommended future variable: `OLLAMA_MODEL=llama3:8b-instruct-q4_K_M` |
+
+### MCP Server Feature Branch
+
+These variables are used by `feature/mcp-server`.
+
+| Variable | Required | Default | Description | Example |
+| --- | --- | --- | --- | --- |
+| `DATABASE_URL` | Required | None | PostgreSQL connection string used by MCP schema inspection and query execution. Secret when it contains credentials. | `postgresql://postgres:postgres@db:5432/defect_management` |
+| `OLLAMA_BASE_URL` | Optional | `http://ollama:11434` | Base URL for the Ollama service used by natural-language-to-SQL generation. | `http://ollama:11434` |
+| `OLLAMA_MODEL` | Optional | `sqlcoder:7b` | Ollama model used to generate SQL queries. | `sqlcoder:7b` |
 
 ### Database
 
@@ -666,6 +746,8 @@ bandit -r .
 
 To try the `feature/defect-ingestion-system` work once it is completed, additional Python packages and system tools will be required. The branch currently references OCR and LLM dependencies in source code but does not add them to `requirements.txt` or the Dockerfile.
 
+To try the `feature/mcp-server` work once it is completed, the branch will need a server implementation in `app/mcp/server.py`, a registered tool in `app/mcp/tools/query_tool.py`, and dependency updates for imported packages such as `requests` and `sqlparse`.
+
 ## 10. Testing Strategy
 
 No automated test suite is present in the repository. There are no unit, integration, end-to-end, contract, performance, or chaos tests checked in, and no coverage threshold is configured.
@@ -688,6 +770,7 @@ Recommended first test additions:
 - Defect lifecycle tests covering create, assign, status update, and history.
 - Regression tests for role-name mismatches and the `/assigments` route typo.
 - Feature-branch tests for PDF text extraction, OCR fallback behavior, LLM JSON validation, and ingestion endpoint authentication.
+- Feature-branch tests for MCP SQL generation prompts, SQL guard bypass attempts, schema introspection, query execution, and authorization boundaries.
 
 ## 11. DevSecOps Pipeline
 
@@ -737,11 +820,14 @@ Local infrastructure is provided by Docker Compose:
 | `db` | `postgres:15` | `5432:5432` | PostgreSQL database |
 | `backend` | Built from `Dockerfile` | `8000:8000` | FastAPI application |
 | `pgadmin` | `dpage/pgadmin4` | `5050:80` | Local database administration |
+| `mcp` | Built from `Dockerfile` on `feature/mcp-server` | `8001:8001` | Draft MCP server container; not runnable until server code is implemented |
+| `ollama` | `ollama/ollama` on `feature/mcp-server` | `11434:11434` | Local LLM runtime for SQL generation |
 
 State and persistence:
 
 - PostgreSQL data persists in the Docker volume `postgres_data`.
 - pgAdmin data persists in the Docker volume `pgadmin_data`.
+- On `feature/mcp-server`, Ollama model data persists in the Docker volume `ollama_data`.
 - No backup, restore, disaster recovery, remote state, or locking strategy is defined.
 
 ## 13. Observability
@@ -790,4 +876,12 @@ Secrets management:
 Network security:
 
 - Docker Compose exposes PostgreSQL on `5432`, the API on `8000`, and pgAdmin on `5050`.
+- On `feature/mcp-server`, Docker Compose also exposes the draft MCP service on `8001` and Ollama on `11434`.
 - No VPC, security group, mTLS, firewall, or ingress configuration is present.
+
+Data classification and PII:
+
+- User and vendor email addresses, phone numbers, organisation names, and addresses are stored in PostgreSQL.
+- The ingestion feature branch may process uploaded defect PDFs, email bodies, and attachments that can contain operational, vessel, personnel, or contact information.
+- The MCP server feature branch may expose database query results through an AI-facing tool. The current draft includes a `SELECT`-only SQL guard, but no user-level authorization or data masking is implemented yet.
+- No encryption-at-rest policy, data masking, retention policy, or data deletion workflow is defined in code.
