@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  devsecops:
+  sast:
     runs-on: ubuntu-latest
 
     steps:
@@ -57,7 +57,7 @@ jobs:
   image_scan:
     name: Build docker image and Scan image
     runs-on: ubuntu-latest
-    needs: [devsecops, secret_scan]
+    needs: [sast, secret_scan]
 
     steps:
       - name: Checkout Code
